@@ -2,91 +2,81 @@ import speech_recognition as sr
 import pyttsx3
 import time
 
-engine = pyttsx3.init()
-engine.setProperty('rate', 150)
-
 def speak(text):
- try:
-    engine.stop
+    print("Assistant:", text)
+    engine = pyttsx3.init("sapi5")
+    engine.setProperty("rate",150)
+    voices=engine.getProperty("voices")
+    if voices:
+        engine.setProperty("voice",voices[0].id)
     engine.say(text)
     engine.runAndWait()
- except:
-    print("Speech error") 
+    engine.stop()
 
-def listen():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        speak("Speak your calculation")
-        recognizer.adjust_for_ambient_noise(source, duration=1)
-        print("Listening...")
-        try:
-            audio = recognizer.listen(source, timeout=10, phrase_time_limit=10)
-        except sr.WaitTimeoutError:
-            speak("No audio incoming")
-            return ""
-        except OSError:
-            speak("Microphone not detected")
-            return ""
-
+def listen(prompt="Speak your calculation"):
+    r=sr.Recognizer()
+    speak(prompt)
+    time.sleep(0.5)
     try:
-        command = recognizer.recognize_google(audio)
-        print("You said:", command)
-        return command.lower()
-    except sr.UnknownValueError:
-        speak("Could not understand")
-        return ""
-    except sr.RequestError:
-        speak("Speech service not available")
-        return ""
-
-def calculate(command):
-    command = command.replace("divided by","/")
-    command = command.replace("plus","+")
-    command = command.replace("minus","-")
-    command = command.replace("multiply","*")
-    command = command.replace("divide","/")
-    command = command.replace("into","*")
-
-    allowed_chars = "0123456789+-*/.() "
-    if not all(char in allowed_chars for char in command):
-        return "Invalid Expression"
-
-    command = command.strip()
-    if command == "" or command[-1] in "+-*/":
-        return "Incomplete Expression"
-
+        with sr.Microphone() as source:
+            r.adjust_for_ambient_noise(source, duration=1)
+            audio=r.listen(source,timeout=10,phrase_time_limit=8)
+    except sr.WaitTimeoutError:
+        speak("No audio detected. Goodbye.")
+        return None
+    except OSError:
+        speak("Microphone not detected.")
+        return None
     try:
-        return eval(command)
+        txt=r.recognize_google(audio).lower()
+        print("You said:",txt)
+        return txt
     except:
-        return "Invalid Expression"
+        speak("Sorry, I could not understand.")
+        return None
+
+def ask_yes_no(q):
+    while True:
+        ans=listen(q+" Please say yes or no.")
+        if ans is None:
+            return False
+        if "yes" in ans:
+            return True
+        if "no" in ans:
+            return False
+
+def calculate(cmd):
+    rep={"divided by":"/","multiplied by":"*","plus":"+","minus":"-","times":"*","into":"*","divide":"/","multiply":"*"}
+    for k,v in rep.items():
+        cmd=cmd.replace(k,v)
+    for w in ["what is","calculate","please","equals","equal to","is"]:
+        cmd=cmd.replace(w,"")
+    try:
+        return True,eval(cmd)
+    except ZeroDivisionError:
+        return False,"Cannot divide by zero."
+    except:
+        return False,"Invalid expression."
 
 def main():
-    speak("Voice Calculator Started")
-    last_input_time = time.time()
-
+    speak("Voice calculator started.")
     while True:
-        command = listen()
-
-        if command == "":
-            if time.time() - last_input_time > 30:
-                speak("No activity detected. Exiting")
-                break
-            continue
-        else:
-            last_input_time = time.time()
-
-        if "exit" in command:
-            speak("Exiting...")
+        cmd=listen()
+        if cmd is None:
             break
+        if "exit" in cmd or "quit" in cmd:
+            speak("Thank you for using AI Voice Calculator. Goodbye.")
+            break
+        speak(f"You said {cmd}")
+        if not ask_yes_no("Is this correct?"):
+            speak("Please say your calculation again.")
+            continue
+        ok,res=calculate(cmd)
+        speak(f"Your answer is {res}" if ok else res)
+        if ask_yes_no("Do you have more questions?"):
+            continue
+        speak("Thank you for using AI Voice Calculator. Goodbye.")
+        break
 
-        result = calculate(command)
-        print("Result:", result)
-
-        if isinstance(result, str):
-            speak(result)
-        else:
-            speak(f"The answer is {result}")
-            time.sleep(1)
-
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
